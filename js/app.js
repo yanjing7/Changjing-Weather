@@ -6,545 +6,741 @@ const UNITS = 'metric'; // 单位制（metric公制，imperial英制）
 const LANG = 'zh_cn'; // 语言设置
 
 // DOM Elements
-const currentDateEl = document.getElementById('current-date');
-const currentTimeEl = document.getElementById('current-time');
-const currentTempEl = document.getElementById('current-temp');
-const currentIconEl = document.getElementById('current-icon');
-const currentDescEl = document.getElementById('current-description');
-const currentWindEl = document.getElementById('current-wind');
-const currentHumidityEl = document.getElementById('current-humidity');
-const currentPressureEl = document.getElementById('current-pressure');
-const forecastContainerEl = document.getElementById('forecast-container');
-const refreshBtn = document.getElementById('refresh-btn');
-const currentYearEl = document.getElementById('current-year');
-const loadingEl = document.querySelector('.loading');
-
-// 全局变量
-let temperatureChart = null;
-let forecastData = [];
-let currentCity = DEFAULT_CITY;
-let currentCountry = DEFAULT_COUNTRY;
-let currentUnit = UNITS;
-let weatherData = null;
-let map = null;
-let currentLayer = null;
-
-// Update time
-function updateDateTime() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    currentDateEl.textContent = now.toLocaleDateString('zh-CN', options);
+document.addEventListener('DOMContentLoaded', function() {
+    // 加载动画
+    const loadingOverlay = document.getElementById('loadingOverlay');
     
-    const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
-    currentTimeEl.textContent = now.toLocaleTimeString('zh-CN', timeOptions);
+    // 头部元素
+    const cityNameElement = document.getElementById('cityName');
+    const cityInput = document.getElementById('cityInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const unitToggle = document.getElementById('unitToggle');
+    const cityTags = document.querySelectorAll('.city-tag');
     
-    // 更新页脚的年份
-    currentYearEl.textContent = now.getFullYear();
-}
-
-// Get weather icon class
-function getWeatherIcon(iconCode) {
-    const icons = {
-        '01d': 'fas fa-sun',
-        '01n': 'fas fa-moon',
-        '02d': 'fas fa-cloud-sun',
-        '02n': 'fas fa-cloud-moon',
-        '03d': 'fas fa-cloud',
-        '03n': 'fas fa-cloud',
-        '04d': 'fas fa-cloud',
-        '04n': 'fas fa-cloud',
-        '09d': 'fas fa-cloud-showers-heavy',
-        '09n': 'fas fa-cloud-showers-heavy',
-        '10d': 'fas fa-cloud-sun-rain',
-        '10n': 'fas fa-cloud-moon-rain',
-        '11d': 'fas fa-bolt',
-        '11n': 'fas fa-bolt',
-        '13d': 'fas fa-snowflake',
-        '13n': 'fas fa-snowflake',
-        '50d': 'fas fa-smog',
-        '50n': 'fas fa-smog'
-    };
+    // 日期时间元素
+    const currentDateElement = document.getElementById('currentDate');
+    const currentTimeElement = document.getElementById('currentTime');
     
-    return icons[iconCode] || 'fas fa-question';
-}
-
-// Get weather animation class
-function getWeatherBackground(iconCode) {
-    if (iconCode.startsWith('01')) {
-        return 'sunny';
-    } else if (iconCode.startsWith('02')) {
-        return 'partly-cloudy';
-    } else if (iconCode.startsWith('03') || iconCode.startsWith('04')) {
-        return 'cloudy';
-    } else if (iconCode.startsWith('09') || iconCode.startsWith('10')) {
-        return 'rainy';
-    } else if (iconCode.startsWith('11')) {
-        return 'stormy';
-    } else if (iconCode.startsWith('13')) {
-        return 'snowy';
-    } else if (iconCode.startsWith('50')) {
-        return 'misty';
-    }
-    return '';
-}
-
-// Format date for forecast
-function formatDate(timestamp) {
-    const date = new Date(timestamp * 1000);
-    const options = { weekday: 'short', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('zh-CN', options);
-}
-
-// 显示加载动画
-function showLoading() {
-    loadingEl.style.display = 'flex';
-    loadingEl.style.animation = 'none';
-    loadingEl.offsetHeight; // Trigger reflow
-    loadingEl.style.animation = null;
-}
-
-// 隐藏加载动画
-function hideLoading() {
-    loadingEl.style.animation = 'fadeOut 0.5s ease-out forwards';
-}
-
-// Get current weather
-async function getCurrentWeather() {
-    try {
-        showLoading();
+    // 当前天气元素
+    const weatherIcon = document.getElementById('weatherIcon');
+    const weatherDescription = document.getElementById('weatherDescription');
+    const currentTemp = document.getElementById('currentTemp');
+    const feelsLike = document.getElementById('feelsLike');
+    const windSpeed = document.getElementById('windSpeed');
+    const humidity = document.getElementById('humidity');
+    const pressure = document.getElementById('pressure');
+    const uvIndex = document.getElementById('uvIndex');
+    const visibility = document.getElementById('visibility');
+    const precipitation = document.getElementById('precipitation');
+    
+    // 预报元素
+    const forecastContainer = document.getElementById('forecastContainer');
+    
+    // 图表元素
+    const tempChart = document.getElementById('tempChart');
+    
+    // 空气质量元素
+    const aqiValue = document.getElementById('aqiValue');
+    const aqiLabel = document.getElementById('aqiLabel');
+    const pm25 = document.getElementById('pm25');
+    const pm10 = document.getElementById('pm10');
+    const o3 = document.getElementById('o3');
+    const no2 = document.getElementById('no2');
+    
+    // 地图元素
+    const weatherMap = document.getElementById('weatherMap');
+    const mapControls = document.querySelectorAll('.map-controls button');
+    
+    // 页脚元素
+    const currentYearElement = document.getElementById('currentYear');
+    
+    // 全局变量
+    let currentCity = DEFAULT_CITY;
+    let currentCountry = DEFAULT_COUNTRY;
+    let currentUnit = UNITS;
+    let weatherData = null;
+    let forecastData = null;
+    let chart = null;
+    let map = null;
+    let currentLayer = null;
+    
+    // 初始化
+    init();
+    
+    function init() {
+        console.log('初始化天气应用...');
         
-        // If you don't have an API key yet, use mock data
-        if (!API_KEY) {
-            setTimeout(() => {
-                getMockCurrentWeather();
-                hideLoading();
-            }, 1000);
-            return;
-        }
-        
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
-        if (!response.ok) {
-            throw new Error('Weather data not available');
-        }
-        
-        const data = await response.json();
-        
-        // 添加动画效果
-        animateValue(currentTempEl, parseFloat(currentTempEl.textContent) || 0, Math.round(data.main.temp), 1000);
-        
-        // Update UI with weather data
-        currentIconEl.className = getWeatherIcon(data.weather[0].icon);
-        currentDescEl.textContent = data.weather[0].description;
-        currentWindEl.textContent = `${data.wind.speed} m/s`;
-        currentHumidityEl.textContent = `${data.main.humidity}%`;
-        currentPressureEl.textContent = `${data.main.pressure} hPa`;
-        
-        // 添加天气背景类
-        document.body.className = getWeatherBackground(data.weather[0].icon);
-        
-        hideLoading();
-    } catch (error) {
-        console.error('Failed to fetch current weather:', error);
-        // Use mock data if API fails
-        getMockCurrentWeather();
-        hideLoading();
-    }
-}
-
-// Get weather forecast
-async function getWeatherForecast() {
-    try {
-        // If you don't have an API key yet, use mock data
-        if (!API_KEY) {
-            getMockForecast();
-            return;
-        }
-        
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
-        if (!response.ok) {
-            throw new Error('Forecast data not available');
-        }
-        
-        const data = await response.json();
-        
-        // Clear previous forecast
-        forecastContainerEl.innerHTML = '';
-        
-        // Get one forecast per day (every 8th item is roughly one day as the API returns data in 3-hour intervals)
-        const dailyForecasts = data.list.filter((item, index) => index % 8 === 0);
-        forecastData = dailyForecasts;
-        
-        // Create forecast cards
-        dailyForecasts.forEach((forecast, index) => {
-            const forecastCard = document.createElement('div');
-            forecastCard.className = 'forecast-card';
-            
-            forecastCard.innerHTML = `
-                <div class="forecast-day">${formatDate(forecast.dt)}</div>
-                <div class="forecast-icon">
-                    <i class="${getWeatherIcon(forecast.weather[0].icon)}"></i>
-                </div>
-                <div class="forecast-temp">${Math.round(forecast.main.temp)}°C</div>
-                <div class="forecast-description">${forecast.weather[0].description}</div>
-                <div class="forecast-details">
-                    <span><i class="fas fa-wind"></i> ${forecast.wind.speed} m/s</span>
-                    <span><i class="fas fa-tint"></i> ${forecast.main.humidity}%</span>
-                </div>
+        // 创建loadingOverlay的样式
+        if(!document.getElementById('loadingStyles')) {
+            const style = document.createElement('style');
+            style.id = 'loadingStyles';
+            style.textContent = `
+                .loading-overlay {
+                    display: flex;
+                    opacity: 1;
+                    visibility: visible;
+                    transition: opacity 0.5s ease, visibility 0.5s ease;
+                }
+                .loading-overlay.hidden {
+                    opacity: 0;
+                    visibility: hidden;
+                }
             `;
-            
-            // 添加点击事件以显示详细信息
-            forecastCard.addEventListener('click', () => {
-                showForecastDetails(forecast, index);
+            document.head.appendChild(style);
+        }
+        
+        // 设置当前年份
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        
+        // 加载天气数据
+        loadWeatherData();
+        
+        // 事件监听器
+        if(refreshBtn) {
+            refreshBtn.addEventListener('click', handleRefreshClick);
+        }
+        
+        if(unitToggle) {
+            unitToggle.addEventListener('change', handleUnitToggleChange);
+        }
+        
+        if(searchBtn) {
+            searchBtn.addEventListener('click', handleSearchClick);
+        }
+        
+        if(cityInput) {
+            cityInput.addEventListener('keyup', handleCityInputKeyup);
+            cityInput.addEventListener('focus', () => {
+                if (cityInput.value.length >= 3) {
+                    searchCities(cityInput.value);
+                }
             });
             
-            forecastContainerEl.appendChild(forecastCard);
+            // 清除输入框内容按钮
+            const clearButton = document.createElement('span');
+            clearButton.innerHTML = '&times;';
+            clearButton.className = 'clear-input';
+            clearButton.style.cssText = 'position:absolute; right:55px; top:50%; transform:translateY(-50%); cursor:pointer; color:#999; font-size:20px;';
+            clearButton.addEventListener('click', () => {
+                cityInput.value = '';
+                cityInput.focus();
+                searchResults.classList.remove('active');
+            });
+            cityInput.parentNode.appendChild(clearButton);
+        }
+        
+        // 热门城市标签点击
+        cityTags.forEach(tag => {
+            tag.addEventListener('click', () => {
+                const city = tag.getAttribute('data-city');
+                if(cityInput) cityInput.value = city;
+                currentCity = city;
+                loadWeatherData();
+            });
         });
         
-        // 创建图表
-        createTemperatureChart(dailyForecasts);
+        // 地图控制按钮
+        if(mapControls && mapControls.length > 0) {
+            mapControls.forEach(button => {
+                button.addEventListener('click', () => {
+                    const layer = button.getAttribute('data-layer');
+                    updateMapLayer(layer);
+                    
+                    // 更新活动按钮
+                    mapControls.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                });
+            });
+        }
         
-    } catch (error) {
-        console.error('Failed to fetch forecast:', error);
-        // Use mock data if API fails
-        getMockForecast();
+        console.log('初始化完成，监听事件已设置');
     }
-}
-
-// Mock data for development or when API key is not available
-function getMockCurrentWeather() {
-    animateValue(currentTempEl, parseFloat(currentTempEl.textContent) || 0, 25, 1000);
-    currentIconEl.className = 'fas fa-cloud-sun';
-    currentDescEl.textContent = '晴间多云';
-    currentWindEl.textContent = '3.5 m/s';
-    currentHumidityEl.textContent = '68%';
-    currentPressureEl.textContent = '1013 hPa';
-}
-
-function getMockForecast() {
-    // Clear previous forecast
-    forecastContainerEl.innerHTML = '';
     
-    // Mock data for 5 days
-    const mockForecast = [
-        { day: '周一', icon: 'fas fa-cloud-sun', temp: 24, desc: '晴间多云', wind: '3.6 m/s', humidity: '65%', dt: Date.now()/1000 },
-        { day: '周二', icon: 'fas fa-sun', temp: 27, desc: '晴天', wind: '2.8 m/s', humidity: '60%', dt: Date.now()/1000 + 86400 },
-        { day: '周三', icon: 'fas fa-cloud-showers-heavy', temp: 22, desc: '小雨', wind: '4.1 m/s', humidity: '75%', dt: Date.now()/1000 + 172800 },
-        { day: '周四', icon: 'fas fa-cloud', temp: 23, desc: '多云', wind: '3.2 m/s', humidity: '70%', dt: Date.now()/1000 + 259200 },
-        { day: '周五', icon: 'fas fa-sun', temp: 26, desc: '晴天', wind: '2.5 m/s', humidity: '62%', dt: Date.now()/1000 + 345600 }
-    ];
-    
-    forecastData = mockForecast.map(item => ({
-        dt: item.dt,
-        main: { temp: item.temp, humidity: parseInt(item.humidity) },
-        wind: { speed: parseFloat(item.wind) },
-        weather: [{ description: item.desc, icon: item.icon === 'fas fa-sun' ? '01d' : '02d' }]
-    }));
-    
-    // Create forecast cards
-    mockForecast.forEach((forecast, index) => {
-        const forecastCard = document.createElement('div');
-        forecastCard.className = 'forecast-card';
+    // 更新日期和时间
+    function updateDateTime() {
+        const now = new Date();
         
-        forecastCard.innerHTML = `
-            <div class="forecast-day">${forecast.day}</div>
-            <div class="forecast-icon">
-                <i class="${forecast.icon}"></i>
-            </div>
-            <div class="forecast-temp">${forecast.temp}°C</div>
-            <div class="forecast-description">${forecast.desc}</div>
-            <div class="forecast-details">
-                <span><i class="fas fa-wind"></i> ${forecast.wind}</span>
-                <span><i class="fas fa-tint"></i> ${forecast.humidity}</span>
-            </div>
-        `;
+        // 设置日期
+        if(currentDateElement) {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            currentDateElement.textContent = now.toLocaleDateString('zh-CN', options);
+        }
         
-        // 添加点击事件以显示详细信息
-        forecastCard.addEventListener('click', () => {
-            showForecastDetails(forecastData[index], index);
+        // 设置时间
+        if(currentTimeElement) {
+            currentTimeElement.textContent = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // 设置年份
+        if(currentYearElement) {
+            currentYearElement.textContent = now.getFullYear();
+        }
+    }
+    
+    // 加载天气数据
+    async function loadWeatherData() {
+        showLoading();
+        console.log('正在加载天气数据，城市：', currentCity);
+        
+        try {
+            // 当前天气数据
+            const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
+            if (!weatherResponse.ok) {
+                throw new Error('Weather data fetch failed');
+            }
+            weatherData = await weatherResponse.json();
+            
+            // 改变网站标题为城市名
+            if(cityNameElement) {
+                cityNameElement.textContent = `${weatherData.name} 天气预报`;
+                document.title = `${weatherData.name} 天气预报`;
+            }
+            
+            // 更新天气数据
+            updateCurrentWeather(weatherData);
+            
+            // 获取空气质量数据
+            fetchAirQuality(weatherData.coord.lat, weatherData.coord.lon);
+            
+            // 获取UV指数
+            fetchUVIndex(weatherData.coord.lat, weatherData.coord.lon);
+            
+            // 获取预报数据
+            const forecastResponse = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
+            if (!forecastResponse.ok) {
+                throw new Error('Forecast data fetch failed');
+            }
+            forecastData = await forecastResponse.json();
+            
+            // 更新预报
+            updateForecast(forecastData);
+            
+            // 更新温度趋势图
+            updateTemperatureChart(forecastData);
+            
+            // 初始化地图
+            initMap(weatherData.coord.lat, weatherData.coord.lon);
+            
+            // 应用背景变化基于当前天气
+            applyWeatherBackground(weatherData.weather[0].id);
+            
+        } catch (error) {
+            console.error('Error fetching weather data:', error);
+            showError(`无法获取城市 "${currentCity}" 的天气数据，请检查城市名称是否正确。`);
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    // 更新当前天气信息
+    function updateCurrentWeather(data) {
+        // 设置图标
+        if(weatherIcon) {
+            const iconCode = data.weather[0].icon;
+            weatherIcon.src = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+            weatherIcon.alt = data.weather[0].description;
+        }
+        
+        // 设置描述
+        if(weatherDescription) {
+            weatherDescription.textContent = data.weather[0].description;
+        }
+        
+        // 设置温度
+        if(currentTemp) {
+            currentTemp.textContent = Math.round(data.main.temp);
+        }
+        
+        if(feelsLike) {
+            feelsLike.textContent = Math.round(data.main.feels_like);
+        }
+        
+        // 设置其他详情
+        if(windSpeed) {
+            windSpeed.textContent = `${data.wind.speed} m/s`;
+        }
+        
+        if(humidity) {
+            humidity.textContent = `${data.main.humidity}%`;
+        }
+        
+        if(pressure) {
+            pressure.textContent = `${data.main.pressure} hPa`;
+        }
+        
+        // 设置能见度（转换为千米）
+        if(visibility) {
+            const visibilityKm = data.visibility / 1000;
+            visibility.textContent = `${visibilityKm.toFixed(1)} km`;
+        }
+        
+        // 设置降水量（如果有）
+        if(precipitation) {
+            if (data.rain && data.rain['1h']) {
+                precipitation.textContent = `${data.rain['1h']} mm`;
+            } else if (data.snow && data.snow['1h']) {
+                precipitation.textContent = `${data.snow['1h']} mm`;
+            } else {
+                precipitation.textContent = '0 mm';
+            }
+        }
+    }
+    
+    // 获取UV指数
+    async function fetchUVIndex(lat, lon) {
+        if(!uvIndex) return;
+        
+        try {
+            const response = await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,daily,alerts&appid=${API_KEY}`);
+            if (!response.ok) {
+                throw new Error('UV index fetch failed');
+            }
+            const data = await response.json();
+            
+            if (data.current && data.current.uvi !== undefined) {
+                uvIndex.textContent = data.current.uvi.toFixed(1);
+            } else {
+                uvIndex.textContent = 'N/A';
+            }
+        } catch (error) {
+            console.error('Error fetching UV index:', error);
+            uvIndex.textContent = 'N/A';
+        }
+    }
+    
+    // 获取空气质量
+    async function fetchAirQuality(lat, lon) {
+        if(!aqiValue || !aqiLabel || !pm25 || !pm10 || !o3 || !no2) return;
+        
+        try {
+            const response = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`);
+            if (!response.ok) {
+                throw new Error('Air quality fetch failed');
+            }
+            const data = await response.json();
+            
+            if (data.list && data.list.length > 0) {
+                const airQuality = data.list[0];
+                
+                // 设置AQI值和标签
+                const aqi = airQuality.main.aqi;
+                aqiValue.textContent = aqi;
+                
+                // 设置AQI标签和颜色
+                let aqiText = '';
+                let aqiColor = '';
+                
+                switch(aqi) {
+                    case 1:
+                        aqiText = '优';
+                        aqiColor = 'var(--success-color)';
+                        break;
+                    case 2:
+                        aqiText = '良';
+                        aqiColor = '#a3cc52';
+                        break;
+                    case 3:
+                        aqiText = '中等';
+                        aqiColor = 'var(--accent-color)';
+                        break;
+                    case 4:
+                        aqiText = '较差';
+                        aqiColor = '#f57f17';
+                        break;
+                    case 5:
+                        aqiText = '很差';
+                        aqiColor = 'var(--danger-color)';
+                        break;
+                    default:
+                        aqiText = 'N/A';
+                        aqiColor = '#999';
+                }
+                
+                aqiLabel.textContent = aqiText;
+                aqiValue.style.color = aqiColor;
+                
+                // 设置污染物数据
+                const components = airQuality.components;
+                pm25.textContent = `${components.pm2_5.toFixed(1)} μg/m³`;
+                pm10.textContent = `${components.pm10.toFixed(1)} μg/m³`;
+                o3.textContent = `${components.o3.toFixed(1)} μg/m³`;
+                no2.textContent = `${components.no2.toFixed(1)} μg/m³`;
+            }
+        } catch (error) {
+            console.error('Error fetching air quality:', error);
+            aqiValue.textContent = 'N/A';
+            aqiLabel.textContent = '无数据';
+        }
+    }
+    
+    // 更新天气预报
+    function updateForecast(data) {
+        if(!forecastContainer) return;
+        
+        // 清空预报容器
+        forecastContainer.innerHTML = '';
+        
+        // 获取未来5天的天气预报（每天中午的数据）
+        const dailyForecasts = [];
+        const processedDates = new Set();
+        
+        data.list.forEach(item => {
+            const date = new Date(item.dt * 1000);
+            const dateString = date.toISOString().split('T')[0];
+            
+            // 只选择每天中午左右(12:00-15:00)的预报
+            const hour = date.getHours();
+            
+            if (!processedDates.has(dateString) && hour >= 12 && hour <= 15) {
+                processedDates.add(dateString);
+                dailyForecasts.push(item);
+            }
         });
         
-        forecastContainerEl.appendChild(forecastCard);
-    });
-    
-    // 创建图表
-    createTemperatureChart(forecastData);
-}
-
-// 数字变化动画
-function animateValue(element, start, end, duration) {
-    let startTimestamp = null;
-    const step = (timestamp) => {
-        if (!startTimestamp) startTimestamp = timestamp;
-        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-        const value = Math.floor(progress * (end - start) + start);
-        element.textContent = value;
-        if (progress < 1) {
-            window.requestAnimationFrame(step);
-        }
-    };
-    window.requestAnimationFrame(step);
-}
-
-// 显示天气预报详细信息
-function showForecastDetails(forecast, index) {
-    // 添加高亮效果
-    const forecastCards = document.querySelectorAll('.forecast-card');
-    forecastCards.forEach(card => card.classList.remove('active'));
-    forecastCards[index].classList.add('active');
-    
-    // 滚动到图表位置
-    document.querySelector('.weather-trend').scrollIntoView({ behavior: 'smooth' });
-    
-    // 更新图表中的高亮
-    updateChartHighlight(index);
-}
-
-// 创建温度趋势图表
-function createTemperatureChart(forecastData) {
-    const ctx = document.getElementById('temperature-chart').getContext('2d');
-    
-    // 如果已存在图表，销毁它
-    if (temperatureChart) {
-        temperatureChart.destroy();
+        // 限制为5天
+        const forecastsToShow = dailyForecasts.slice(0, 5);
+        
+        // 创建预报卡片
+        forecastsToShow.forEach((forecast, index) => {
+            const date = new Date(forecast.dt * 1000);
+            const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+            const dayName = dayNames[date.getDay()];
+            
+            const card = document.createElement('div');
+            card.className = 'forecast-card';
+            card.innerHTML = `
+                <div class="forecast-day">${dayName}</div>
+                <div class="forecast-date">${date.getMonth() + 1}月${date.getDate()}日</div>
+                <img class="forecast-icon" src="https://openweathermap.org/img/wn/${forecast.weather[0].icon}@2x.png" alt="${forecast.weather[0].description}">
+                <div class="forecast-temp">
+                    <div class="forecast-max">${Math.round(forecast.main.temp_max)}°</div>
+                    <div class="forecast-min">/${Math.round(forecast.main.temp_min)}°</div>
+                </div>
+                <div class="forecast-description">${forecast.weather[0].description}</div>
+            `;
+            
+            // 添加动画延迟
+            card.style.animationDelay = `${index * 0.1}s`;
+            
+            forecastContainer.appendChild(card);
+        });
     }
     
-    const labels = forecastData.map(item => formatDate(item.dt));
-    const temperatures = forecastData.map(item => Math.round(item.main.temp));
-    
-    temperatureChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '温度 (°C)',
-                data: temperatures,
-                fill: true,
-                backgroundColor: 'rgba(76, 162, 205, 0.2)',
-                borderColor: '#4ca2cd',
-                borderWidth: 2,
-                pointBackgroundColor: '#4ca2cd',
-                pointBorderColor: '#fff',
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                    titleColor: '#333',
-                    bodyColor: '#333',
-                    titleFont: { 
-                        family: 'Microsoft YaHei',
-                        size: 14
+    // 更新温度趋势图
+    function updateTemperatureChart(data) {
+        if(!tempChart) return;
+        
+        // 准备图表数据
+        const next24Hours = data.list.slice(0, 8); // 未来24小时（3小时间隔，共8个数据点）
+        
+        const labels = next24Hours.map(item => {
+            const date = new Date(item.dt * 1000);
+            return date.getHours() + ':00';
+        });
+        
+        const temperatures = next24Hours.map(item => Math.round(item.main.temp));
+        const feelsLike = next24Hours.map(item => Math.round(item.main.feels_like));
+        
+        // 如果已有图表，销毁它
+        if (chart) {
+            chart.destroy();
+        }
+        
+        // 创建新图表
+        const ctx = tempChart.getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '温度',
+                        data: temperatures,
+                        borderColor: '#4ca2cd',
+                        backgroundColor: 'rgba(76, 162, 205, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
                     },
-                    bodyFont: {
-                        family: 'Microsoft YaHei',
-                        size: 13
-                    },
-                    padding: 12,
-                    displayColors: false,
-                    borderWidth: 1,
-                    borderColor: '#ddd'
-                },
-                legend: {
-                    display: false
-                }
+                    {
+                        label: '体感温度',
+                        data: feelsLike,
+                        borderColor: '#67b26f',
+                        backgroundColor: 'rgba(103, 178, 111, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false
+                    }
+                ]
             },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    grid: {
-                        color: 'rgba(200, 200, 200, 0.2)'
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
                     },
-                    ticks: {
-                        font: {
-                            family: 'Microsoft YaHei'
-                        }
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
                     }
                 },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        font: {
-                            family: 'Microsoft YaHei'
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value) {
+                                return value + '°';
+                            }
                         }
                     }
                 }
-            },
-            animation: {
-                duration: 2000,
-                easing: 'easeOutQuart'
-            },
-            hover: {
-                mode: 'index',
-                intersect: false
-            },
-            interaction: {
-                mode: 'index',
-                intersect: false
+            }
+        });
+    }
+    
+    // 初始化地图
+    function initMap(lat, lon) {
+        if (!weatherMap) return;
+        
+        // 如果已经有地图实例，先移除
+        if (map) {
+            map.remove();
+        }
+        
+        // 创建地图
+        map = L.map('weatherMap').setView([lat, lon], 10);
+        
+        // 添加地图图层
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // 添加标记
+        L.marker([lat, lon]).addTo(map)
+            .bindPopup(`<b>${weatherData.name}</b><br>${weatherData.weather[0].description}<br>${Math.round(weatherData.main.temp)}°C`)
+            .openPopup();
+        
+        // 默认选择温度图层
+        updateMapLayer('temp');
+        if(mapControls && mapControls.length > 0) {
+            mapControls[0].classList.add('active');
+        }
+    }
+    
+    // 更新地图图层
+    function updateMapLayer(layerType) {
+        if (!map) return;
+        
+        // 移除当前图层
+        if (currentLayer) {
+            map.removeLayer(currentLayer);
+        }
+        
+        // 添加新图层
+        const layerUrl = getWeatherLayerUrl(layerType);
+        currentLayer = L.tileLayer(layerUrl, {
+            attribution: '&copy; <a href="https://openweathermap.org/">OpenWeather</a>',
+            opacity: 0.5
+        }).addTo(map);
+    }
+    
+    // 获取天气图层URL
+    function getWeatherLayerUrl(layerType) {
+        let layerCode = '';
+        
+        switch(layerType) {
+            case 'temp':
+                layerCode = 'temp_new';
+                break;
+            case 'precipitation':
+                layerCode = 'precipitation_new';
+                break;
+            case 'clouds':
+                layerCode = 'clouds_new';
+                break;
+            case 'wind':
+                layerCode = 'wind_new';
+                break;
+            default:
+                layerCode = 'temp_new';
+        }
+        
+        return `https://tile.openweathermap.org/map/${layerCode}/{z}/{x}/{y}.png?appid=${API_KEY}`;
+    }
+    
+    // 应用天气背景
+    function applyWeatherBackground(weatherCode) {
+        let gradientColors;
+        
+        // 根据天气代码设置不同的背景渐变
+        if (weatherCode >= 200 && weatherCode < 300) {
+            // 雷暴
+            gradientColors = 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)';
+        } else if (weatherCode >= 300 && weatherCode < 400) {
+            // 小雨
+            gradientColors = 'linear-gradient(135deg, #616161 0%, #9bc5c3 100%)';
+        } else if (weatherCode >= 500 && weatherCode < 600) {
+            // 雨
+            gradientColors = 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)';
+        } else if (weatherCode >= 600 && weatherCode < 700) {
+            // 雪
+            gradientColors = 'linear-gradient(135deg, #e6dada 0%, #274046 100%)';
+        } else if (weatherCode >= 700 && weatherCode < 800) {
+            // 雾霾
+            gradientColors = 'linear-gradient(135deg, #757f9a 0%, #d7dde8 100%)';
+        } else if (weatherCode === 800) {
+            // 晴天
+            gradientColors = 'linear-gradient(135deg, #56ccf2 0%, #2f80ed 100%)';
+        } else {
+            // 多云
+            gradientColors = 'linear-gradient(135deg, #757f9a 0%, #d7dde8 100%)';
+        }
+        
+        document.body.style.background = gradientColors;
+        document.body.style.backgroundSize = '400% 400%';
+        document.body.style.animation = 'gradientBG 15s ease infinite';
+    }
+    
+    // 搜索城市
+    async function searchCities(query) {
+        if(!searchResults) return;
+        
+        if (query.length < 3) {
+            searchResults.classList.remove('active');
+            return;
+        }
+        
+        console.log('正在搜索城市:', query);
+        
+        try {
+            const response = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=5&appid=${API_KEY}`);
+            if (!response.ok) {
+                throw new Error('City search failed');
+            }
+            
+            const cities = await response.json();
+            console.log('搜索结果:', cities);
+            
+            // 显示搜索结果
+            searchResults.innerHTML = '';
+            
+            if (cities.length === 0) {
+                searchResults.innerHTML = '<div class="search-item">未找到结果</div>';
+            } else {
+                cities.forEach(city => {
+                    const cityItem = document.createElement('div');
+                    cityItem.className = 'search-item';
+                    
+                    // 城市名称和州/省（如果有）
+                    let cityText = city.name;
+                    if (city.state) {
+                        cityText += `, ${city.state}`;
+                    }
+                    
+                    // 添加国家代码
+                    const countrySpan = document.createElement('span');
+                    countrySpan.className = 'country';
+                    countrySpan.textContent = city.country;
+                    
+                    cityItem.textContent = cityText;
+                    cityItem.appendChild(countrySpan);
+                    
+                    // 添加点击事件以选择城市
+                    cityItem.addEventListener('click', () => {
+                        if(cityInput) cityInput.value = city.name;
+                        currentCity = city.name;
+                        currentCountry = city.country;
+                        searchResults.classList.remove('active');
+                        loadWeatherData();
+                    });
+                    
+                    searchResults.appendChild(cityItem);
+                });
+            }
+            
+            searchResults.classList.add('active');
+            
+        } catch (error) {
+            console.error('Error searching cities:', error);
+            searchResults.innerHTML = '<div class="search-item">搜索出错，请稍后再试</div>';
+            searchResults.classList.add('active');
+        }
+    }
+    
+    // 处理刷新按钮点击
+    function handleRefreshClick() {
+        if(!refreshBtn) return;
+        
+        refreshBtn.classList.add('loading');
+        loadWeatherData().finally(() => {
+            setTimeout(() => {
+                refreshBtn.classList.remove('loading');
+            }, 1000);
+        });
+    }
+    
+    // 处理单位切换
+    function handleUnitToggleChange() {
+        if(!unitToggle) return;
+        
+        currentUnit = unitToggle.checked ? 'imperial' : 'metric';
+        loadWeatherData();
+    }
+    
+    // 处理搜索按钮点击
+    function handleSearchClick() {
+        if(!cityInput) return;
+        
+        const query = cityInput.value.trim();
+        if (query) {
+            console.log('搜索按钮点击，查询:', query);
+            currentCity = query;
+            currentCountry = ''; // 让API自动确定国家
+            loadWeatherData();
+            if(searchResults) {
+                searchResults.classList.remove('active');
             }
         }
-    });
-}
-
-// 更新图表中的高亮点
-function updateChartHighlight(index) {
-    const dataset = temperatureChart.data.datasets[0];
-    const originalPointRadius = new Array(dataset.data.length).fill(6);
-    const originalPointBorderWidth = new Array(dataset.data.length).fill(1);
+    }
     
-    originalPointRadius[index] = 10;
-    originalPointBorderWidth[index] = 2;
-    
-    dataset.pointRadius = originalPointRadius;
-    dataset.pointBorderWidth = originalPointBorderWidth;
-    
-    temperatureChart.update();
-}
-
-// 添加刷新按钮事件
-function setupEventListeners() {
-    refreshBtn.addEventListener('click', function() {
-        this.classList.add('rotating');
-        this.disabled = true;
-        
-        getCurrentWeather();
-        getWeatherForecast();
-        
-        setTimeout(() => {
-            this.classList.remove('rotating');
-            this.disabled = false;
-        }, 2000);
-    });
-}
-
-// Initialize
-function init() {
-    // 添加刷新按钮的CSS
-    const style = document.createElement('style');
-    style.textContent = `
-        .refresh-button {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #4ca2cd;
-            color: white;
-            border: none;
-            border-radius: 20px;
-            padding: 8px 16px;
-            margin-top: 15px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-        
-        .refresh-button:hover {
-            background: #3d8eb3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        .refresh-button i {
-            margin-right: 8px;
-        }
-        
-        .rotating {
-            animation: rotate 1s linear infinite;
-        }
-        
-        @keyframes rotate {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
+    // 处理输入框键盘事件
+    function handleCityInputKeyup(e) {
+        if (e.key === 'Enter') {
+            handleSearchClick();
+        } else if (cityInput.value.length >= 3) {
+            searchCities(cityInput.value);
+        } else {
+            if(searchResults) {
+                searchResults.classList.remove('active');
             }
         }
-        
-        .forecast-card {
-            cursor: pointer;
-        }
-        
-        .forecast-card.active {
-            border: 2px solid #4ca2cd;
-            transform: translateY(-8px) scale(1.03);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-        }
-        
-        .forecast-details {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: #666;
-        }
-        
-        .forecast-details span {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .forecast-details i {
-            color: #4ca2cd;
-        }
-        
-        /* 不同天气背景 */
-        body.sunny {
-            background: linear-gradient(135deg, #FFD700, #FF8C00);
-        }
-        
-        body.partly-cloudy {
-            background: linear-gradient(135deg, #87CEEB, #6495ED);
-        }
-        
-        body.cloudy {
-            background: linear-gradient(135deg, #B0C4DE, #708090);
-        }
-        
-        body.rainy {
-            background: linear-gradient(135deg, #4682B4, #2F4F4F);
-        }
-        
-        body.stormy {
-            background: linear-gradient(135deg, #483D8B, #2F4F4F);
-        }
-        
-        body.snowy {
-            background: linear-gradient(135deg, #B0E0E6, #87CEFA);
-        }
-        
-        body.misty {
-            background: linear-gradient(135deg, #D3D3D3, #A9A9A9);
-        }
-    `;
-    document.head.appendChild(style);
+    }
     
-    // Update date and time immediately
-    updateDateTime();
+    // 显示加载中
+    function showLoading() {
+        if(loadingOverlay) {
+            console.log('显示加载动画');
+            loadingOverlay.classList.remove('hidden');
+        }
+    }
     
-    // Update date and time every second
-    setInterval(updateDateTime, 1000);
+    // 隐藏加载中
+    function hideLoading() {
+        if(loadingOverlay) {
+            console.log('隐藏加载动画');
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+            }, 500);
+        }
+    }
     
-    // Set up event listeners
-    setupEventListeners();
-    
-    // Get weather data
-    getCurrentWeather();
-    getWeatherForecast();
-    
-    // Refresh weather data every 30 minutes (1800000 ms)
-    setInterval(() => {
-        getCurrentWeather();
-        getWeatherForecast();
-    }, 1800000);
-}
-
-// Start when DOM is loaded
-document.addEventListener('DOMContentLoaded', init); 
+    // 显示错误信息
+    function showError(message) {
+        // 可以用toast或警告框显示错误
+        alert(message);
+    }
+});
