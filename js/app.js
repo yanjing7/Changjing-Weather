@@ -1,8 +1,9 @@
 // Constants
-const API_KEY = '83307646e5834bd8d48eadc121ea45e3'; // OpenWeatherMap API密钥
-const CITY_ID = '1801401'; // Jiangyin City ID
-const LANG = 'zh_cn'; // Language for weather descriptions
-const UNITS = 'metric'; // Use metric system (Celsius)
+const API_KEY = '4f8dc7d60ee47e346a86ba9ba5ae236d'; // 您的OpenWeatherMap API密钥
+const DEFAULT_CITY = 'Jiangyin'; // 默认城市
+const DEFAULT_COUNTRY = 'CN'; // 默认国家代码
+const UNITS = 'metric'; // 单位制（metric公制，imperial英制）
+const LANG = 'zh_cn'; // 语言设置
 
 // DOM Elements
 const currentDateEl = document.getElementById('current-date');
@@ -21,6 +22,12 @@ const loadingEl = document.querySelector('.loading');
 // 全局变量
 let temperatureChart = null;
 let forecastData = [];
+let currentCity = DEFAULT_CITY;
+let currentCountry = DEFAULT_COUNTRY;
+let currentUnit = UNITS;
+let weatherData = null;
+let map = null;
+let currentLayer = null;
 
 // Update time
 function updateDateTime() {
@@ -115,7 +122,7 @@ async function getCurrentWeather() {
             return;
         }
         
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?id=${CITY_ID}&appid=${API_KEY}&lang=${LANG}&units=${UNITS}`);
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
         if (!response.ok) {
             throw new Error('Weather data not available');
         }
@@ -153,7 +160,7 @@ async function getWeatherForecast() {
             return;
         }
         
-        const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast?id=${CITY_ID}&appid=${API_KEY}&lang=${LANG}&units=${UNITS}`);
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
         if (!response.ok) {
             throw new Error('Forecast data not available');
         }
