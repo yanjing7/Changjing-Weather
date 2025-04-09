@@ -1,5 +1,5 @@
 // Constants
-const API_KEY = ''; // Get your API key from https://openweathermap.org/
+const API_KEY = '83307646e5834bd8d48eadc121ea45e3'; // OpenWeatherMap API密钥
 const CITY_ID = '1801401'; // Jiangyin City ID
 const LANG = 'zh_cn'; // Language for weather descriptions
 const UNITS = 'metric'; // Use metric system (Celsius)
