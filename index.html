@@ -17,9 +17,11 @@
         <div class="header-container">
             <h1 id="cityName">See Weather</h1>
             <div class="location-search">
-                <input type="text" id="cityInput" placeholder="输入城市名称..." autocomplete="off">
-                <button id="searchBtn"><i class="fas fa-search"></i></button>
-                <div class="search-results" id="searchResults"></div>
+                <form onsubmit="return searchCity()">
+                    <input type="text" id="cityInput" placeholder="输入城市名称..." autocomplete="off">
+                    <button type="button" id="searchBtn" onclick="searchCity()"><i class="fas fa-search"></i></button>
+                    <div class="search-results" id="searchResults"></div>
+                </form>
             </div>
             <div class="popular-cities">
                 <span class="city-tag" data-city="北京">北京</span>
@@ -29,16 +31,28 @@
                 <span class="city-tag" data-city="东京">东京</span>
                 <span class="city-tag" data-city="伦敦">伦敦</span>
             </div>
-            <button id="refreshBtn" class="refresh-btn" title="刷新天气数据">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <div class="toggle-container">
-                <span>°C</span>
-                <label class="switch">
-                    <input type="checkbox" id="unitToggle">
-                    <span class="slider"></span>
-                </label>
-                <span>°F</span>
+            <div class="controls-container">
+                <button id="refreshBtn" class="refresh-btn" title="刷新天气数据">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <div class="toggle-container" title="切换温度单位">
+                    <span>°C</span>
+                    <label class="switch">
+                        <input type="checkbox" id="unitToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span>°F</span>
+                </div>
+                <div class="timezone-selector" title="选择时区">
+                    <label for="timezoneSelect"><i class="fas fa-globe"></i></label>
+                    <select id="timezoneSelect" onchange="setTimezone(this.value)">
+                        <option value="Asia/Shanghai" selected>上海 (UTC+8)</option>
+                        <option value="Asia/Tokyo">东京 (UTC+9)</option>
+                        <option value="Europe/London">伦敦 (UTC+0)</option>
+                        <option value="America/New_York">纽约 (UTC-5)</option>
+                        <option value="America/Los_Angeles">洛杉矶 (UTC-8)</option>
+                    </select>
+                </div>
             </div>
         </div>
     </header>

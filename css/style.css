@@ -513,5 +513,51 @@ footer a:hover {
     .loading-overlay {
         background-color: rgba(20, 30, 40, 0.9);
     }
-} 
+}
+
+/* 控件容器样式 */
+.controls-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: auto;
+}
+
+/* 时区选择器样式 */
+.timezone-selector {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 5px 10px;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.timezone-selector label {
+    color: #fff;
+    margin-right: 5px;
+    font-size: 14px;
+}
+
+.timezone-selector select {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 14px;
+    padding: 2px 5px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 15px;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0px center;
+    background-size: 16px;
+}
+
+.timezone-selector select option {
+    background-color: #2c3e50;
+    color: #fff;
 } 
