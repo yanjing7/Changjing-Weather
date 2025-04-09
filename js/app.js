@@ -195,8 +195,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 改变网站标题为城市名
             if(cityNameElement) {
-                cityNameElement.textContent = `${weatherData.name} 天气预报`;
-                document.title = `${weatherData.name} 天气预报`;
+                cityNameElement.textContent = `${weatherData.name} - See Weather`;
+                document.title = `${weatherData.name} - See Weather`;
             }
             
             // 更新天气数据
