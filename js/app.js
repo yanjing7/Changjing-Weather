@@ -7,6 +7,8 @@ const LANG = 'zh_cn'; // 语言设置
 
 // DOM Elements
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('页面已加载，初始化应用...');
+    
     // 加载动画
     const loadingOverlay = document.getElementById('loadingOverlay');
     
@@ -18,6 +20,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const refreshBtn = document.getElementById('refreshBtn');
     const unitToggle = document.getElementById('unitToggle');
     const cityTags = document.querySelectorAll('.city-tag');
+    
+    // DOM元素检查
+    if (!cityInput) console.error('找不到cityInput元素');
+    if (!searchBtn) console.error('找不到searchBtn元素');
+    if (!searchResults) console.error('找不到searchResults元素');
     
     // 日期时间元素
     const currentDateElement = document.getElementById('currentDate');
@@ -95,25 +102,69 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDateTime();
         setInterval(updateDateTime, 1000);
         
+        // 加载上次查询的城市
+        const lastCity = localStorage.getItem('lastCity');
+        const lastCountry = localStorage.getItem('lastCountry');
+        
+        if (lastCity) {
+            console.log('加载上次查询的城市:', lastCity);
+            currentCity = lastCity;
+            if (lastCountry) currentCountry = lastCountry;
+            if (cityInput) cityInput.value = currentCity;
+        }
+        
         // 加载天气数据
         loadWeatherData();
         
-        // 事件监听器
+        // 事件监听器设置
+        setupEventListeners();
+        
+        console.log('初始化完成，监听事件已设置');
+    }
+    
+    // 设置所有事件监听器
+    function setupEventListeners() {
+        console.log('设置事件监听器...');
+        
+        // 刷新按钮
         if(refreshBtn) {
+            console.log('设置刷新按钮监听器');
             refreshBtn.addEventListener('click', handleRefreshClick);
         }
         
+        // 单位切换
         if(unitToggle) {
             unitToggle.addEventListener('change', handleUnitToggleChange);
         }
         
+        // 搜索按钮
         if(searchBtn) {
-            searchBtn.addEventListener('click', handleSearchClick);
+            console.log('设置搜索按钮监听器');
+            searchBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('搜索按钮被点击');
+                handleSearchClick();
+            });
         }
         
+        // 输入框
         if(cityInput) {
-            cityInput.addEventListener('keyup', handleCityInputKeyup);
-            cityInput.addEventListener('focus', () => {
+            console.log('设置输入框监听器');
+            cityInput.addEventListener('keyup', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    console.log('输入框按下Enter键');
+                    handleSearchClick();
+                } else if (cityInput.value.length >= 3) {
+                    searchCities(cityInput.value);
+                } else {
+                    if(searchResults) {
+                        searchResults.classList.remove('active');
+                    }
+                }
+            });
+            
+            cityInput.addEventListener('focus', function() {
                 if (cityInput.value.length >= 3) {
                     searchCities(cityInput.value);
                 }
@@ -127,7 +178,9 @@ document.addEventListener('DOMContentLoaded', function() {
             clearButton.addEventListener('click', () => {
                 cityInput.value = '';
                 cityInput.focus();
-                searchResults.classList.remove('active');
+                if(searchResults) {
+                    searchResults.classList.remove('active');
+                }
             });
             cityInput.parentNode.appendChild(clearButton);
         }
@@ -136,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
         cityTags.forEach(tag => {
             tag.addEventListener('click', () => {
                 const city = tag.getAttribute('data-city');
+                console.log('点击城市标签:', city);
                 if(cityInput) cityInput.value = city;
                 currentCity = city;
                 loadWeatherData();
@@ -155,8 +209,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
         }
-        
-        console.log('初始化完成，监听事件已设置');
     }
     
     // 更新日期和时间
@@ -186,12 +238,26 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('正在加载天气数据，城市：', currentCity);
         
         try {
+            // 检查缓存
+            if (loadCachedWeatherData()) {
+                console.log('使用缓存的天气数据');
+                hideLoading();
+                return;
+            }
+            
             // 当前天气数据
-            const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`);
+            const url = `https://api.openweathermap.org/data/2.5/weather?q=${currentCity},${currentCountry}&appid=${API_KEY}&units=${currentUnit}&lang=${LANG}`;
+            console.log('请求URL:', url);
+            
+            const weatherResponse = await fetch(url);
             if (!weatherResponse.ok) {
-                throw new Error('Weather data fetch failed');
+                throw new Error(`Weather data fetch failed with status ${weatherResponse.status}`);
             }
             weatherData = await weatherResponse.json();
+            console.log('获取到天气数据:', weatherData);
+            
+            // 保存天气数据到本地存储
+            saveToLocalStorage('weatherData', weatherData);
             
             // 改变网站标题为城市名
             if(cityNameElement) {
@@ -215,6 +281,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             forecastData = await forecastResponse.json();
             
+            // 保存预报数据到本地存储
+            saveToLocalStorage('forecastData', forecastData);
+            
             // 更新预报
             updateForecast(forecastData);
             
@@ -227,9 +296,21 @@ document.addEventListener('DOMContentLoaded', function() {
             // 应用背景变化基于当前天气
             applyWeatherBackground(weatherData.weather[0].id);
             
+            // 保存当前城市到本地存储
+            localStorage.setItem('lastCity', currentCity);
+            localStorage.setItem('lastCountry', currentCountry || '');
+            
         } catch (error) {
             console.error('Error fetching weather data:', error);
-            showError(`无法获取城市 "${currentCity}" 的天气数据，请检查城市名称是否正确。`);
+            
+            // 检查是否有缓存数据作为备份
+            if (getFromLocalStorage('weatherData') && getFromLocalStorage('forecastData')) {
+                console.log('使用备份缓存数据');
+                loadCachedWeatherData();
+                showError(`无法获取最新的天气数据，显示缓存的天气信息。错误: ${error.message}`);
+            } else {
+                showError(`无法获取城市 "${currentCity}" 的天气数据，请检查城市名称是否正确。错误: ${error.message}`);
+            }
         } finally {
             hideLoading();
         }
@@ -237,6 +318,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 更新当前天气信息
     function updateCurrentWeather(data) {
+        console.log('更新当前天气信息');
+        
         // 设置图标
         if(weatherIcon) {
             const iconCode = data.weather[0].icon;
@@ -246,11 +329,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 设置描述
         if(weatherDescription) {
-            weatherDescription.textContent = data.weather[0].description;
+            weatherDescription.textContent = formatWeatherDescription(data.weather[0].description, data.weather[0].id);
         }
         
         // 设置温度
         if(currentTemp) {
+            // 添加随机偏差以模拟墨迹天气风格（仅在需要时使用）
+            // const tempOffset = (Math.random() * 2 - 1); // -1 到 1 之间的随机偏差
+            // const adjustedTemp = Math.round(data.main.temp + tempOffset);
+            // currentTemp.textContent = adjustedTemp;
             currentTemp.textContent = Math.round(data.main.temp);
         }
         
@@ -260,7 +347,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 设置其他详情
         if(windSpeed) {
-            windSpeed.textContent = `${data.wind.speed} m/s`;
+            const windDirection = getWindDirection(data.wind.deg);
+            windSpeed.textContent = `${windDirection} ${data.wind.speed} m/s`;
         }
         
         if(humidity) {
@@ -285,6 +373,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 precipitation.textContent = `${data.snow['1h']} mm`;
             } else {
                 precipitation.textContent = '0 mm';
+            }
+        }
+        
+        // 设置日出日落时间
+        if (data.sys && data.sys.sunrise && data.sys.sunset) {
+            const sunriseTime = new Date(data.sys.sunrise * 1000);
+            const sunsetTime = new Date(data.sys.sunset * 1000);
+            
+            // 如果页面上有日出日落元素，则更新它们
+            const sunriseElement = document.getElementById('sunrise');
+            const sunsetElement = document.getElementById('sunset');
+            
+            if (sunriseElement) {
+                sunriseElement.textContent = sunriseTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            }
+            
+            if (sunsetElement) {
+                sunsetElement.textContent = sunsetTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             }
         }
     }
@@ -427,6 +533,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             forecastContainer.appendChild(card);
         });
+
+        // 保存到本地缓存
+        saveToLocalStorage('forecastData', data);
     }
     
     // 更新温度趋势图
@@ -605,6 +714,125 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.animation = 'gradientBG 15s ease infinite';
     }
     
+    // 本地存储操作 - 保存
+    function saveToLocalStorage(key, data) {
+        try {
+            const jsonData = JSON.stringify({
+                data: data,
+                timestamp: new Date().getTime()
+            });
+            localStorage.setItem(key, jsonData);
+            console.log(`已保存数据到本地: ${key}`);
+        } catch (e) {
+            console.error('保存数据到本地存储时出错:', e);
+        }
+    }
+    
+    // 本地存储操作 - 读取
+    function getFromLocalStorage(key, expirationTime = 30 * 60 * 1000) { // 默认30分钟
+        try {
+            const item = localStorage.getItem(key);
+            if (!item) return null;
+            
+            const parsedItem = JSON.parse(item);
+            const now = new Date().getTime();
+            
+            // 检查数据是否过期
+            if (now - parsedItem.timestamp > expirationTime) {
+                console.log(`${key} 数据已过期`);
+                localStorage.removeItem(key);
+                return null;
+            }
+            
+            console.log(`从本地加载数据: ${key}`);
+            return parsedItem.data;
+        } catch (e) {
+            console.error('从本地存储读取数据时出错:', e);
+            return null;
+        }
+    }
+    
+    // 加载时检查缓存数据
+    function loadCachedWeatherData() {
+        const cachedWeatherData = getFromLocalStorage('weatherData');
+        const cachedForecastData = getFromLocalStorage('forecastData');
+        
+        if (cachedWeatherData && cachedForecastData) {
+            console.log('使用缓存的天气数据');
+            weatherData = cachedWeatherData;
+            forecastData = cachedForecastData;
+            
+            // 墨迹天气风格的优化 - 轻微调整温度、湿度等数据
+            // weatherData.main.temp = Math.round((weatherData.main.temp + (Math.random() * 0.8 - 0.4)) * 10) / 10;
+            // weatherData.main.feels_like = Math.round((weatherData.main.feels_like + (Math.random() * 0.6 - 0.3)) * 10) / 10;
+            
+            // 更新UI
+            if (cityNameElement) {
+                cityNameElement.textContent = `${weatherData.name} 天气预报`;
+                document.title = `${weatherData.name} 天气预报`;
+            }
+            
+            updateCurrentWeather(weatherData);
+            updateForecast(forecastData);
+            updateTemperatureChart(forecastData);
+            
+            // 应用背景变化基于当前天气
+            applyWeatherBackground(weatherData.weather[0].id);
+            
+            // 在后台刷新数据
+            setTimeout(() => {
+                loadWeatherData();
+            }, 1000);
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // 处理刷新按钮点击
+    function handleRefreshClick() {
+        if(!refreshBtn) return;
+        
+        refreshBtn.classList.add('loading');
+        loadWeatherData().finally(() => {
+            setTimeout(() => {
+                refreshBtn.classList.remove('loading');
+            }, 1000);
+        });
+    }
+    
+    // 处理单位切换
+    function handleUnitToggleChange() {
+        if(!unitToggle) return;
+        
+        currentUnit = unitToggle.checked ? 'imperial' : 'metric';
+        loadWeatherData();
+    }
+    
+    // 处理搜索按钮点击
+    function handleSearchClick() {
+        if(!cityInput) {
+            console.error('无法找到城市输入框元素');
+            return;
+        }
+        
+        const query = cityInput.value.trim();
+        console.log('搜索按钮点击，查询:', query);
+        
+        if (query) {
+            currentCity = query;
+            currentCountry = ''; // 让API自动确定国家
+            loadWeatherData();
+            if(searchResults) {
+                searchResults.classList.remove('active');
+            }
+        } else {
+            console.log('查询为空，不执行搜索');
+            showError('请输入城市名称');
+        }
+    }
+    
     // 搜索城市
     async function searchCities(query) {
         if(!searchResults) return;
@@ -671,55 +899,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 处理刷新按钮点击
-    function handleRefreshClick() {
-        if(!refreshBtn) return;
-        
-        refreshBtn.classList.add('loading');
-        loadWeatherData().finally(() => {
-            setTimeout(() => {
-                refreshBtn.classList.remove('loading');
-            }, 1000);
-        });
-    }
-    
-    // 处理单位切换
-    function handleUnitToggleChange() {
-        if(!unitToggle) return;
-        
-        currentUnit = unitToggle.checked ? 'imperial' : 'metric';
-        loadWeatherData();
-    }
-    
-    // 处理搜索按钮点击
-    function handleSearchClick() {
-        if(!cityInput) return;
-        
-        const query = cityInput.value.trim();
-        if (query) {
-            console.log('搜索按钮点击，查询:', query);
-            currentCity = query;
-            currentCountry = ''; // 让API自动确定国家
-            loadWeatherData();
-            if(searchResults) {
-                searchResults.classList.remove('active');
-            }
-        }
-    }
-    
-    // 处理输入框键盘事件
-    function handleCityInputKeyup(e) {
-        if (e.key === 'Enter') {
-            handleSearchClick();
-        } else if (cityInput.value.length >= 3) {
-            searchCities(cityInput.value);
-        } else {
-            if(searchResults) {
-                searchResults.classList.remove('active');
-            }
-        }
-    }
-    
     // 显示加载中
     function showLoading() {
         if(loadingOverlay) {
@@ -740,7 +919,78 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 显示错误信息
     function showError(message) {
-        // 可以用toast或警告框显示错误
+        console.error('错误:', message);
         alert(message);
+    }
+    
+    // 格式化天气描述（墨迹天气风格）
+    function formatWeatherDescription(description, weatherId) {
+        // 优化描述文本，使其更接近墨迹天气风格
+        const weatherTypes = {
+            200: '雷阵雨',
+            201: '雷阵雨',
+            202: '雷暴',
+            210: '雷阵雨',
+            211: '雷暴',
+            212: '强雷暴',
+            221: '雷阵雨',
+            230: '雷阵雨',
+            231: '雷阵雨',
+            232: '雷暴',
+            300: '小雨',
+            301: '小雨',
+            302: '中雨',
+            310: '小雨',
+            311: '小雨',
+            312: '中雨',
+            313: '小雨',
+            314: '中雨',
+            321: '阵雨',
+            500: '小雨',
+            501: '中雨',
+            502: '大雨',
+            503: '暴雨',
+            504: '大暴雨',
+            511: '冻雨',
+            520: '阵雨',
+            521: '阵雨',
+            522: '大阵雨',
+            531: '阵雨',
+            600: '小雪',
+            601: '中雪',
+            602: '大雪',
+            611: '雨夹雪',
+            612: '雨夹雪',
+            613: '雨夹雪',
+            615: '雨夹雪',
+            616: '雨夹雪',
+            620: '阵雪',
+            621: '阵雪',
+            622: '大阵雪',
+            701: '雾',
+            711: '烟霾',
+            721: '霾',
+            731: '扬沙',
+            741: '雾',
+            751: '沙尘',
+            761: '尘',
+            762: '火山灰',
+            771: '狂风',
+            781: '龙卷风',
+            800: '晴',
+            801: '少云',
+            802: '多云',
+            803: '阴',
+            804: '阴'
+        };
+        
+        return weatherTypes[weatherId] || description;
+    }
+    
+    // 获取风向描述
+    function getWindDirection(degrees) {
+        const directions = ['北风', '东北风', '东风', '东南风', '南风', '西南风', '西风', '西北风'];
+        const index = Math.round(degrees / 45) % 8;
+        return directions[index];
     }
 });
